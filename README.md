@@ -17,3 +17,5 @@ The resistance of 1.5K Ohms can be decreased up to 1K Ohms
 CAN H and CAN L must be connected by you. the two pin shown are not normally used on any enclosures or leads. it is therefore easy to use them for a quick connection and easy
 
 You can also use an HC-05 ansi there is nothing to connect to the tablet.
+
+![SchémaBT](Pics/CAN-Bus-arduino-schema-BT.png)
