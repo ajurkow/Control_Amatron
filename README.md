@@ -18,4 +18,4 @@ CAN H and CAN L must be connected by you. the two pin shown are not normally use
 
 You can also use an HC-05 ansi there is nothing to connect to the tablet.
 
-![SchémaBT](Pics/CAN-Bus-arduino-schema-BT.png)
+![SchémaBT](Pics/CAN-Bus-arduino-BT-schema.png)
