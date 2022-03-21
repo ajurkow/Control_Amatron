@@ -12,7 +12,7 @@
 #define PULSE_BY_100M 13100
 
 //Variables for CAN bus
-#define SPEED_MCP MCP_16MHZ           // Define your speed for MCP : MCP_16MHZ or MCP_8MHZ
+#define SPEED_MCP MCP_8MHZ            // Define your speed for MCP : MCP_16MHZ or MCP_8MHZ
 #define CAN0_INT 2                    // Set INT to pin 2
 MCP_CAN CAN0(10);                     // Set CS to pin 10
 
