@@ -1,4 +1,4 @@
-/* V 0.9 - 20/03/2022 - Daniel Desmartins
+/* V 1.1 - 06/08/2022 - Daniel Desmartins
     Connected to the Relay Port in AgOpenGPS
     If you find any mistakes or have an idea to improove the code, feel free to contact me. N'hésitez pas à me contacter en cas de problème ou si vous avez une idée d'amélioration.
 */
@@ -33,6 +33,10 @@ float gpsSpeed = 0, hertz = 0;
 bool isPGNFound = false, isHeaderFound = false;
 uint8_t pgn = 0, dataLength = 0;
 int16_t tempHeader = 0;
+
+//show life in AgIO
+uint8_t helloAgIO[] = {0x80,0x81, 0x7B, 0xEA, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0x6D };
+uint8_t helloCounter=0;
 
 uint8_t AOG[] = {0x80, 0x81, 0x7B, 0xEA, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0xCC };
 
@@ -93,7 +97,14 @@ void loop() {
     if (watchdogTimer > 10) {
       offLo = 255;
       onLo = 0;
-      if (spreaderStatus && watchdogTimer < 12) setSpreader(FULL); //Close Spreader 
+      if (spreaderStatus && watchdogTimer < 12) setSpreader(FULL); //Close Spreader
+      
+      //show life in AgIO
+      if (++helloCounter > 10) {
+        Serial.write(helloAgIO,sizeof(helloAgIO));
+        Serial.flush();   // flush out buffer
+        helloCounter = 0;
+      }
     } else { //Field is Open
       if (spreaderOffResetTimer > 10) {
         offLo = 255;
@@ -107,57 +118,57 @@ void loop() {
         
         //Forces left sections that cannot be closed
         if (bitRead(lastLo, Section2) || bitRead(lastLo, Section3)) {
-          bitWrite(lastLo, Section2, 0);
-          bitWrite(lastLo, Section3, 0);
+          bitClear(lastLo, Section2);
+          bitClear(lastLo, Section3);
         } else if (bitRead(relayLo, Section1)) {
-          bitWrite(relayLo, Section2, 1);
-          bitWrite(relayLo, Section3, 1);
-          bitWrite(onLo, Section2, 1);
-          bitWrite(onLo, Section3, 1);
+          bitSet(relayLo, Section2);
+          bitSet(relayLo, Section3);
+          bitSet(onLo, Section2);
+          bitSet(onLo, Section3);
         } else if (bitRead(relayLo, Section2)) {          
           if (bitRead(onLo, Section2)) {
-            bitWrite(lastLo, Section2, 1);
-            bitWrite(offLo, Section2, 1);
-            bitWrite(onLo, Section2, 0);
-            bitWrite(offLo, Section3, 1);
-            bitWrite(onLo, Section3, 0);
+            bitSet(lastLo, Section2);
+            bitSet(offLo, Section2);
+            bitClear(onLo, Section2);
+            bitSet(offLo, Section3);
+            bitClear(onLo, Section3);
           } else {
-            bitWrite(relayLo, Section3, 1);
-            bitWrite(onLo, Section3, 1);
+            bitSet(relayLo, Section3);
+            bitSet(onLo, Section3);
           }
         } else if (bitRead(relayLo, Section3)) {
           if (bitRead(onLo, Section3)) {
-            bitWrite(lastLo, Section3, 1);
-            bitWrite(offLo, Section3, 1);
-            bitWrite(onLo, Section3, 0);
+            bitSet(lastLo, Section3);
+            bitSet(offLo, Section3);
+            bitClear(onLo, Section3);
           }
         }
         
         //Forces right sections that cannot be closed
         if (bitRead(lastLo, Section5) || bitRead(lastLo, Section4)) {
-          bitWrite(lastLo, Section5, 0);
-          bitWrite(lastLo, Section4, 0);
+          bitClear(lastLo, Section5);
+          bitClear(lastLo, Section4);
         } else if (bitRead(relayLo, Section6)) {
-          bitWrite(relayLo, Section5, 1);
-          bitWrite(relayLo, Section4, 1);
-          bitWrite(onLo, Section5, 1);
-          bitWrite(onLo, Section4, 1);
+          bitSet(relayLo, Section5);
+          bitSet(relayLo, Section4);
+          bitSet(onLo, Section5);
+          bitSet(onLo, Section4);
         } else if (bitRead(relayLo, Section5)) {          
           if (bitRead(onLo, Section5)) {
-            bitWrite(lastLo, Section5, 1);
-            bitWrite(offLo, Section5, 1);
-            bitWrite(onLo, Section5, 0);
-            bitWrite(offLo, Section4, 1);
-            bitWrite(onLo, Section4, 0);
+            bitSet(lastLo, Section5);
+            bitSet(offLo, Section5);
+            bitClear(onLo, Section5);
+            bitSet(offLo, Section4);
+            bitClear(onLo, Section4);
           } else {
-            bitWrite(relayLo, Section4, 1);
-            bitWrite(onLo, Section4, 1);
+            bitSet(relayLo, Section4);
+            bitSet(onLo, Section4);
           }
         } else if (bitRead(relayLo, Section4)) {
           if (bitRead(onLo, Section4)) {
-            bitWrite(lastLo, Section4, 1);
-            bitWrite(offLo, Section4, 1);
-            bitWrite(onLo, Section4, 0);
+            bitSet(lastLo, Section4);
+            bitSet(offLo, Section4);
+            bitClear(onLo, Section4);
           }
         }
         
@@ -213,7 +224,7 @@ void loop() {
       //Send to AOG
       AOG[9] = (uint8_t)onLo;
       AOG[10] = (uint8_t)offLo;
-
+      
       //add the checksum
       int16_t CK_A = 0;
       for (uint8_t i = 2; i < sizeof(AOG) - 1; i++)
@@ -221,7 +232,7 @@ void loop() {
         CK_A = (CK_A + AOG[i]);
       }
       AOG[sizeof(AOG) - 1] = CK_A;
-
+      
       Serial.write(AOG, sizeof(AOG));
       Serial.flush();   // flush out buffer
       if (offLo) return; //quickly updates sections
@@ -321,53 +332,53 @@ void readSpreaderStatus() {
         case 0xFD: //rxBuf[2] = 0x03            //Close right
         case 0x29: //rxBuf[2] = 0x04
         case 0x28: //rxBuf[2] = 0x04
-          bitWrite(spreaderStatus, Section1, 0);
-          bitWrite(spreaderStatus, Section2, 0);
-          bitWrite(spreaderStatus, Section3, 0);
+          bitClear(spreaderStatus, Section1);
+          bitClear(spreaderStatus, Section2);
+          bitClear(spreaderStatus, Section3);
           break;
         
         case 0x2A: //rxBuf[2] = 0x04             //Close left
         case 0x2B:
         case 0x01:
-          bitWrite(spreaderStatus, Section4, 0);
-          bitWrite(spreaderStatus, Section5, 0);
-          bitWrite(spreaderStatus, Section6, 0);
+          bitClear(spreaderStatus, Section4);
+          bitClear(spreaderStatus, Section5);
+          bitClear(spreaderStatus, Section6);
           break;
         
         case 0x00: //rxBuf[2] = 0x04             //Fully open right
-          bitWrite(spreaderStatus, Section1, 1);
-          bitWrite(spreaderStatus, Section2, 1);
-          bitWrite(spreaderStatus, Section3, 1);
+          bitSet(spreaderStatus, Section1);
+          bitSet(spreaderStatus, Section2);
+          bitSet(spreaderStatus, Section3);
           break;
         
         case 0x04: //rxBuf[2] = 0x04             //Fully open left
-          bitWrite(spreaderStatus, Section4, 1);
-          bitWrite(spreaderStatus, Section5, 1);
-          bitWrite(spreaderStatus, Section6, 1);
+          bitSet(spreaderStatus, Section4);
+          bitSet(spreaderStatus, Section5);
+          bitSet(spreaderStatus, Section6);
           break;
         
         case 0xFF: //rxBuf[2] = 0x03             //Half open right
-          bitWrite(spreaderStatus, Section1, 0);
-          bitWrite(spreaderStatus, Section2, 1);
-          bitWrite(spreaderStatus, Section3, 1);
+          bitClear(spreaderStatus, Section1);
+          bitSet(spreaderStatus, Section2);
+          bitSet(spreaderStatus, Section3);
           break;
         
         case 0xFE: //rxBuf[2] = 0x03             //Minimum right opening
-          bitWrite(spreaderStatus, Section1, 0);
-          bitWrite(spreaderStatus, Section2, 0);
-          bitWrite(spreaderStatus, Section3, 1);
+          bitClear(spreaderStatus, Section1);
+          bitClear(spreaderStatus, Section2);
+          bitSet(spreaderStatus, Section3);
           break;
         
         case 0x03: //rxBuf[2] = 0x04             //Half open left
-          bitWrite(spreaderStatus, Section4, 1);
-          bitWrite(spreaderStatus, Section5, 1);
-          bitWrite(spreaderStatus, Section6, 0);
+          bitSet(spreaderStatus, Section4);
+          bitSet(spreaderStatus, Section5);
+          bitClear(spreaderStatus, Section6);
           break;
         
         case 0x02: //rxBuf[2] = 0x04             //Minimum left opening
-          bitWrite(spreaderStatus, Section4, 1);
-          bitWrite(spreaderStatus, Section5, 0);
-          bitWrite(spreaderStatus, Section6, 0);
+          bitSet(spreaderStatus, Section4);
+          bitClear(spreaderStatus, Section5);
+          bitClear(spreaderStatus, Section6);
           break;
       }
     } else if (rxBuf[0] == 0xA8 && (rxBuf[1] == 0xCC || rxBuf[1] == 0xCD)) {
