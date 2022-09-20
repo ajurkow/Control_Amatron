@@ -1,4 +1,4 @@
-/* V 1.1 - 06/08/2022 - Daniel Desmartins
+/* V 1.3 - 20/09/2022 - Daniel Desmartins
     Connected to the Relay Port in AgOpenGPS
     If you find any mistakes or have an idea to improove the code, feel free to contact me. N'hésitez pas à me contacter en cas de problème ou si vous avez une idée d'amélioration.
 */
@@ -9,7 +9,7 @@
 
 //Pins and variable for speed:
 #define PinOutputImpuls 9
-#define PULSE_BY_100M 13100
+#define PULSE_BY_100M 13080
 
 //Variables for CAN bus
 #define SPEED_MCP MCP_8MHZ            // Define your speed for MCP : MCP_16MHZ or MCP_8MHZ
@@ -49,9 +49,13 @@ uint8_t currentData[8] = {0x00, 0x01, 0x00, 0x00, 0x10, 0x27, 0x00, 0xFF}; //Set
 
 enum _set { FULL, RIGHT, LEFT, R_RIGHT, R_LEFT, I_RIGHT, I_LEFT };
 enum _section { Section1, Section2, Section3, Section4, Section5, Section6 };
+bool leftSpecial = false;
+bool rightSpecial = false;
 
 //The variables used for storage
-uint8_t relayLo = 0, lastRelay1 = 0, lastRelay2 = 0, lastRelay3 = 0, lastRelay4 = 0, spreaderStatus = 0;
+uint8_t relayLo = 0, spreaderStatus = 0;
+uint8_t leftSection4 = 0, leftSection3 = 0, leftSection2 = 0, leftSection1 = 0, leftSection = 0;
+uint8_t rightSection4 = 0, rightSection3 = 0, rightSection2 = 0, rightSection1 = 0, rightSection = 0;
 
 uint8_t onLo = 0, offLo = 255, lastLo = 0;
 //End of variables
@@ -174,28 +178,37 @@ void loop() {
         
         if (!offLo) {
           //waits for the position sent by AOG to be stabilized. the spreader cannot change state quickly.
-          if (lastRelay1 == relayLo) {
-            if (lastRelay2 == lastRelay1) {
-              if (lastRelay3 == lastRelay2) {
-                lastRelay4 = lastRelay3;
-              }
-              lastRelay3 = lastRelay2;
-            }
-            lastRelay2 = lastRelay1;
-          }
-          lastRelay1 = relayLo;
+          bitWrite(leftSection4, Section1, bitRead(relayLo, Section1));
+          bitWrite(leftSection4, Section2, bitRead(relayLo, Section2));
+          bitWrite(leftSection4, Section3, bitRead(relayLo, Section3));
+          bitWrite(rightSection4, Section4, bitRead(relayLo, Section4));
+          bitWrite(rightSection4, Section5, bitRead(relayLo, Section5));
+          bitWrite(rightSection4, Section6, bitRead(relayLo, Section6));
           
-          //Open/Close Right Spreader
-          if (bitRead(lastRelay4, Section4)) {
-            if (!bitRead(spreaderStatus, Section4)) {
-              setSpreader(RIGHT);
+          if (leftSection3 == leftSection4) {
+            if (leftSection2 == leftSection3) {
+              if (leftSection1 == leftSection2) {
+                leftSection = leftSection1;
+              }
+              leftSection1 = leftSection2;
             }
-          } else if (bitRead(spreaderStatus, Section4)) {
-            setSpreader(RIGHT);
+            leftSection2 = leftSection3;
           }
-         
+          if (rightSection3 == rightSection4) {
+            if (rightSection2 == rightSection3) {
+              if (rightSection1 == rightSection2) {
+                rightSection = rightSection1;
+              }
+              rightSection1 = rightSection2;
+            }
+            rightSection2 = rightSection3;
+          }
+          
+          leftSection3 = leftSection4;
+          rightSection3 = rightSection4;
+          
           //Open/Close Left Spreader
-          if (bitRead(lastRelay4, Section3)) {
+          if (bitRead(leftSection, Section3)) {
             if (!bitRead(spreaderStatus, Section3)) {
               setSpreader(LEFT);
             }
@@ -203,21 +216,34 @@ void loop() {
             setSpreader(LEFT);
           }
           
-          //reduces or increases the right sections
-          if (bitRead(lastRelay4, Section6)) {
-            if (!bitRead(spreaderStatus, Section6)) setSpreader(I_RIGHT);
-          } else if (bitRead(spreaderStatus, Section6)) setSpreader(R_RIGHT);
-          if (bitRead(lastRelay4, Section5)) {
-            if (!bitRead(spreaderStatus, Section5)) setSpreader(I_RIGHT);
-          } else if (bitRead(spreaderStatus, Section5)) setSpreader(R_RIGHT); 
-  
+          //Open/Close Right Spreader
+          if (bitRead(rightSection, Section4)) {
+            if (!bitRead(spreaderStatus, Section4)) {
+              setSpreader(RIGHT);
+            }
+          } else if (bitRead(spreaderStatus, Section4)) {
+            setSpreader(RIGHT);
+          }
+         
           //reduces or increases the left sections
-          if (bitRead(lastRelay4, Section1)) {
-            if (!bitRead(spreaderStatus, Section1)) setSpreader(I_LEFT);
-          } else if (bitRead(spreaderStatus, Section1)) setSpreader(R_LEFT);
-          if (bitRead(lastRelay4, Section2)) {
-            if (!bitRead(spreaderStatus, Section2)) setSpreader(I_LEFT);
-          } else if (bitRead(spreaderStatus, Section2)) setSpreader(R_LEFT);
+          if (!leftSpecial) {
+            if (bitRead(leftSection, Section1)) {
+              if (!bitRead(spreaderStatus, Section1)) setSpreader(I_LEFT);
+            } else if (bitRead(spreaderStatus, Section1)) setSpreader(R_LEFT);
+            if (bitRead(leftSection, Section2)) {
+              if (!bitRead(spreaderStatus, Section2)) setSpreader(I_LEFT);
+            } else if (bitRead(spreaderStatus, Section2)) setSpreader(R_LEFT);
+          }
+          
+          //reduces or increases the right sections
+          if (!rightSpecial) {
+            if (bitRead(rightSection, Section6)) {
+              if (!bitRead(spreaderStatus, Section6)) setSpreader(I_RIGHT);
+            } else if (bitRead(spreaderStatus, Section6)) setSpreader(R_RIGHT);
+            if (bitRead(rightSection, Section5)) {
+              if (!bitRead(spreaderStatus, Section5)) setSpreader(I_RIGHT);
+            } else if (bitRead(spreaderStatus, Section5)) setSpreader(R_RIGHT); 
+          }
         }
       }
       
@@ -327,62 +353,98 @@ void loop() {
 void readSpreaderStatus() {
   CAN0.readMsgBuf(&rxId, &len, rxBuf);
   if (rxId == 0x9CE72690) { //Status Of Spreader
-    if (rxBuf[0] == 0xA0 && rxBuf[3] == 0x01 /*rxBuf[3] == 0x02*/) {
+    if (rxBuf[0] == 0xA0 && rxBuf[3] == 0x01 && (rxBuf[2] == 0x03 || rxBuf[2] == 0x04)) {
       switch (rxBuf[1]) {
-        case 0xFD: //rxBuf[2] = 0x03            //Close right
+        case 0xFD: //rxBuf[2] = 0x03            //Close left
         case 0x29: //rxBuf[2] = 0x04
         case 0x28: //rxBuf[2] = 0x04
           bitClear(spreaderStatus, Section1);
           bitClear(spreaderStatus, Section2);
           bitClear(spreaderStatus, Section3);
+          leftSpecial = false;
+          break;
+        case 0x17: //rxBuf[2] = 0x04 //border spreading
+        case 0x0A:                   //limit spreading
+        case 0x2C:                   //ditch spreading
+          bitClear(spreaderStatus, Section1);
+          bitClear(spreaderStatus, Section2);
+          bitClear(spreaderStatus, Section3);
+          leftSpecial = true;
           break;
         
-        case 0x2A: //rxBuf[2] = 0x04             //Close left
+        case 0x2A: //rxBuf[2] = 0x04             //Close right
         case 0x2B:
         case 0x01:
           bitClear(spreaderStatus, Section4);
           bitClear(spreaderStatus, Section5);
           bitClear(spreaderStatus, Section6);
+          rightSpecial = false;
+          break;
+        case 0x14: //rxBuf[2] = 0x04 //border spreading
+        case 0x0B:                   //limit spreading
+        case 0x2E:                   //ditch spreading
+          bitClear(spreaderStatus, Section4);
+          bitClear(spreaderStatus, Section5);
+          bitClear(spreaderStatus, Section6);
+          rightSpecial = true;
           break;
         
-        case 0x00: //rxBuf[2] = 0x04             //Fully open right
+        case 0x00: //rxBuf[2] = 0x04             //Fully open left
           bitSet(spreaderStatus, Section1);
           bitSet(spreaderStatus, Section2);
           bitSet(spreaderStatus, Section3);
+          leftSpecial = false;
+          break;
+        case 0x18: //rxBuf[2] = 0x04 //border spreading
+        case 0xFC: //rxBuf[2] = 0x03 //limit spreading
+        case 0x2D: //rxBuf[2] = 0x04 //ditch spreading
+          bitSet(spreaderStatus, Section1);
+          bitSet(spreaderStatus, Section2);
+          bitSet(spreaderStatus, Section3);
+          leftSpecial = true;
           break;
         
-        case 0x04: //rxBuf[2] = 0x04             //Fully open left
+        case 0x04: //rxBuf[2] = 0x04             //Fully open right
           bitSet(spreaderStatus, Section4);
           bitSet(spreaderStatus, Section5);
           bitSet(spreaderStatus, Section6);
+          rightSpecial = false;
+          break;
+        case 0x15: //rxBuf[2] = 0x04 //border spreading
+        case 0x07:                   //limit spreading
+        case 0x2F:                   //ditch spreading
+          bitSet(spreaderStatus, Section4);
+          bitSet(spreaderStatus, Section5);
+          bitSet(spreaderStatus, Section6);
+          rightSpecial = true;
           break;
         
-        case 0xFF: //rxBuf[2] = 0x03             //Half open right
+        case 0xFF: //rxBuf[2] = 0x03             //Half open left
           bitClear(spreaderStatus, Section1);
           bitSet(spreaderStatus, Section2);
           bitSet(spreaderStatus, Section3);
           break;
         
-        case 0xFE: //rxBuf[2] = 0x03             //Minimum right opening
+        case 0xFE: //rxBuf[2] = 0x03             //Minimum left opening
           bitClear(spreaderStatus, Section1);
           bitClear(spreaderStatus, Section2);
           bitSet(spreaderStatus, Section3);
           break;
         
-        case 0x03: //rxBuf[2] = 0x04             //Half open left
+        case 0x03: //rxBuf[2] = 0x04             //Half open right
           bitSet(spreaderStatus, Section4);
           bitSet(spreaderStatus, Section5);
           bitClear(spreaderStatus, Section6);
           break;
         
-        case 0x02: //rxBuf[2] = 0x04             //Minimum left opening
+        case 0x02: //rxBuf[2] = 0x04             //Minimum right opening
           bitSet(spreaderStatus, Section4);
           bitClear(spreaderStatus, Section5);
           bitClear(spreaderStatus, Section6);
           break;
       }
     } else if (rxBuf[0] == 0xA8 && (rxBuf[1] == 0xCC || rxBuf[1] == 0xCD)) {
-      Serial.println("Spreader Work A8!"); //It remains to determine the acceptable minimum number of revolutions
+      //Serial.println("Spreader Work A8!"); //It remains to determine the acceptable minimum number of revolutions
       spreaderOffResetTimer = 0;
       offLo = 0;
     }
@@ -390,7 +452,7 @@ void readSpreaderStatus() {
   /*else if (rxId == 0x9CE69026) { //Manuel bouton actived
     if (rxBuf[0] == 0x00 && rxBuf[1] == 0x02 && rxBuf[4] == 0x10 && rxBuf[5] == 0x27 && rxBuf[7] == 0xFF) {
       if (rxBuf[2] == 0x50 || rxBuf[2] == 0x51 || rxBuf[2] == 0x52 || rxBuf[2] == 0x53 || rxBuf[2] == 0x54 || rxBuf[2] == 0xED || rxBuf[2] == 0xEE) {
-      //bitWrite(spreaderStatus, 7, 1);
+        manuelMode = true;
         Serial.println("Manuel bouton actived!");
       }
     }
