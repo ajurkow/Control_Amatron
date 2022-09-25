@@ -1,4 +1,4 @@
-/* V 1.4 - 25/09/2022 - Daniel Desmartins
+/* V 1.3 - 20/09/2022 - Daniel Desmartins
     Connected to the Relay Port in AgOpenGPS
     If you find any mistakes or have an idea to improove the code, feel free to contact me. N'hésitez pas à me contacter en cas de problème ou si vous avez une idée d'amélioration.
 */
@@ -47,13 +47,10 @@ uint8_t rxBuf[8];
 
 uint8_t currentData[8] = {0x00, 0x01, 0x00, 0x00, 0x10, 0x27, 0x00, 0xFF}; //Set Command Data
 
-enum _set { FULL, RIGHT, LEFT, R_RIGHT, R_LEFT, I_RIGHT, I_LEFT, I_LEFT_FLOW, I_RIGHT_FLOW, R_LEFT_FLOW, R_RIGHT_FLOW };
+enum _set { FULL, RIGHT, LEFT, R_RIGHT, R_LEFT, I_RIGHT, I_LEFT };
 enum _section { Section1, Section2, Section3, Section4, Section5, Section6 };
 bool leftSpecial = false;
 bool rightSpecial = false;
-bool manuelMode_L = false;
-bool manuelMode_R = false;
-bool lastManuelMode = false;
 
 //The variables used for storage
 uint8_t relayLo = 0, spreaderStatus = 0;
@@ -120,15 +117,6 @@ void loop() {
           setSpreader(FULL); //Close Spreader
           lastTime -= 4000;
         }
-      } else if (manuelMode_L || manuelMode_R) {
-        onLo = spreaderStatus;
-        offLo = 255 - onLo;
-        lastManuelMode = true;
-      } else if (lastManuelMode) {
-        lastManuelMode = false;
-        onLo = 0;
-        offLo = 255;
-        lastTime -= 500;
       } else {
         offLo = 0;
         
@@ -273,8 +261,7 @@ void loop() {
       
       Serial.write(AOG, sizeof(AOG));
       Serial.flush();   // flush out buffer
-      
-      if (offLo && !manuelMode_L && !manuelMode_R) return; //quickly updates sections
+      if (offLo) return; //quickly updates sections
     }
   }
 
@@ -375,7 +362,6 @@ void readSpreaderStatus() {
           bitClear(spreaderStatus, Section2);
           bitClear(spreaderStatus, Section3);
           leftSpecial = false;
-          manuelMode_L = false;
           break;
         case 0x17: //rxBuf[2] = 0x04 //border spreading
         case 0x0A:                   //limit spreading
@@ -384,7 +370,6 @@ void readSpreaderStatus() {
           bitClear(spreaderStatus, Section2);
           bitClear(spreaderStatus, Section3);
           leftSpecial = true;
-          manuelMode_L = false;
           break;
         
         case 0x2A: //rxBuf[2] = 0x04             //Close right
@@ -394,7 +379,6 @@ void readSpreaderStatus() {
           bitClear(spreaderStatus, Section5);
           bitClear(spreaderStatus, Section6);
           rightSpecial = false;
-          manuelMode_R = false;
           break;
         case 0x14: //rxBuf[2] = 0x04 //border spreading
         case 0x0B:                   //limit spreading
@@ -403,7 +387,6 @@ void readSpreaderStatus() {
           bitClear(spreaderStatus, Section5);
           bitClear(spreaderStatus, Section6);
           rightSpecial = true;
-          manuelMode_R = false;
           break;
         
         case 0x00: //rxBuf[2] = 0x04             //Fully open left
@@ -466,16 +449,14 @@ void readSpreaderStatus() {
       offLo = 0;
     }
   }
-  else if (rxId == 0x9CE69026) { //Manuel bouton actived
+  /*else if (rxId == 0x9CE69026) { //Manuel bouton actived
     if (rxBuf[0] == 0x00 && rxBuf[1] == 0x02 && rxBuf[4] == 0x10 && rxBuf[5] == 0x27 && rxBuf[7] == 0xFF) {
-      if (rxBuf[2] == 0x50)
-        manuelMode_L = manuelMode_R = true;
-      else if (rxBuf[2] == 0xED)
-        manuelMode_R = true;
-      else if (rxBuf[2] == 0xEE)
-        manuelMode_L = true;
+      if (rxBuf[2] == 0x50 || rxBuf[2] == 0x51 || rxBuf[2] == 0x52 || rxBuf[2] == 0x53 || rxBuf[2] == 0x54 || rxBuf[2] == 0xED || rxBuf[2] == 0xEE) {
+        manuelMode = true;
+        Serial.println("Manuel bouton actived!");
+      }
     }
-  }
+  }*/
 }
 
 void setSpreader(uint8_t set) {
@@ -520,30 +501,6 @@ void setSpreader(uint8_t set) {
       currentData[2] = 0x50;
       currentData[3] = 0x14;
       currentData[6] = 0x07;
-      break;
-    
-    case I_LEFT_FLOW:       //Increases Left Flow
-      currentData[2] = 0x89;
-      currentData[3] = 0x13;
-      currentData[6] = 0x02;
-      break;
-    
-    case I_RIGHT_FLOW:      //Increases Right Flow
-      currentData[2] = 0x88;
-      currentData[3] = 0x13;
-      currentData[6] = 0x01;
-      break;
-    
-    case R_LEFT_FLOW:       //Reduces Left Flow
-      currentData[2] = 0x8B;
-      currentData[3] = 0x13;
-      currentData[6] = 0x04;
-      break;
-    
-    case R_RIGHT_FLOW:      //Reduces Right Flow
-      currentData[2] = 0x8A;
-      currentData[3] = 0x13;
-      currentData[6] = 0x03;
       break;
   }
   CAN0.sendMsgBuf(0x1CE69026, 1, 8, currentData);

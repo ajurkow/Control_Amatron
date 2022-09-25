@@ -1,4 +1,4 @@
-﻿# Control_Amatron
+# Control_Amatron
 Section control of Amatron by AgOpenGPS
 
 
@@ -7,7 +7,7 @@ Use this lib https://github.com/coryjfowler/MCP_CAN_lib and https://bitbucket.or
 . Using newTone() over tone() because it solves problems with frequencies below 31Hz, which generated speed errors at low speeds. This library has many other advantages...
 
 # Software
-Since the spreader cannot change position quickly, the code is made so that the changes are not abrupt. Therefore I recommend some adjustment in AOG, an opening advance at least 2,5s and closing 0.2s and an overlap between 50% and 80%. At least that's what worked best for me.
+Since the spreader cannot change position quickly, the code is made so that the changes are not abrupt. Therefore I recommend some adjustment in AOG, an opening advance at least 2s and closing 1.6s and an overlap between 50% and 80%. At least that's what worked best for me.
 
 # Hardware
 ![Schéma](Pics/CAN-Bus-arduino-schema.png)
